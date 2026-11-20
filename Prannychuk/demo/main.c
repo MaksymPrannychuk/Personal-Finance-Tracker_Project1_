@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "backup.h"
-
+#include "ui.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -77,18 +77,58 @@ static void print_status(const char *label, PFTStatus status)
     printf("  %s%s%s: %s%s%s\n", blue(), label, reset(),
            status == PFT_OK ? green() : red(), pft_status_string(status), reset());
 }
+
+static void calculate_totals(const TransactionList *list,
+                             int64_t *income,
+                             int64_t *expenses)
+{
+    *income = 0;
+    *expenses = 0;
+
+    for (size_t i = 0; i < list->count; i++) {
+        const Transaction *t = &list->items[i];
+
+        if (t->type == INCOME) {
+            *income += t->amount_cents;
+        } else if (t->type == EXPENSE) {
+            *expenses += t->amount_cents;
+        }
+    }
+}
+
 static void show_header(const char *path, const TransactionList *list, int unlocked, int dirty)
 {
-    printf("\n%s", blue());
-    puts("+----------------------------------------------------------+");
-    puts("|              PERSONAL FINANCE TRACKER                  |");
-    puts("|                 SECURE DATA VAULT                      |");
-    puts("+----------------------------------------------------------+");
-    printf("%s", reset());
+
+    int64_t income = 0;
+    int64_t expenses = 0;
+
+    if (unlocked) {
+        calculate_totals(list, &income, &expenses);
+    }
+
+    
+printf("\n%s", blue());
+puts("+----------------------------------------------------------+");
+puts("|                 PERSONAL FINANCE TRACKER                 |");
+puts("+----------------------------------------------------------+");
+printf("%s", reset());
     printf("  Vault: %s\n", path);
     printf("  Status: %s%s%s", unlocked ? green() : dim(), unlocked ? "UNLOCKED" : "LOCKED", reset());
     if (dirty) printf("   %s* unsaved changes%s", red(), reset());
     if (unlocked) printf("   Records: %zu", list->count);
+
+    if (unlocked) {
+        printf("\n");
+        printf("  ----------------------------------------\n");
+        printf("  Income:   %s%.2f UAH%s\n",
+               green(), income / 100.0, reset());
+        printf("  Expenses: %s%.2f UAH%s\n",
+               red(), expenses / 100.0, reset());
+        printf("  Balance:  %.2f UAH\n",
+               (income - expenses) / 100.0);
+        printf("  ----------------------------------------\n");
+    }
+
     putchar('\n');
 }
 static void menu(void)
