@@ -1,0 +1,9 @@
+# Local financial records and backups are private; never commit them.
+*.enc
+*.enc.bak
+*.tmp.*
+
+# Build products and editor temp files
+build/
+*.o
+*.swp
