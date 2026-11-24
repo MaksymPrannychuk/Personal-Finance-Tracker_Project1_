@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 #include "backup.h"
-#include "ui.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -78,7 +77,7 @@ static void print_status(const char *label, PFTStatus status)
            status == PFT_OK ? green() : red(), pft_status_string(status), reset());
 }
 
-static void calculate_totals(const TransactionList *list,
+static int calculate_totals(const TransactionList *list,
                              int64_t *income,
                              int64_t *expenses)
 {
@@ -88,12 +87,11 @@ static void calculate_totals(const TransactionList *list,
     for (size_t i = 0; i < list->count; i++) {
         const Transaction *t = &list->items[i];
 
-        if (t->type == INCOME) {
-            *income += t->amount_cents;
-        } else if (t->type == EXPENSE) {
-            *expenses += t->amount_cents;
-        }
+        int64_t *total = t->type == INCOME ? income : expenses;
+        if (t->amount_cents > INT64_MAX - *total) return 0;
+        *total += t->amount_cents;
     }
+    return 1;
 }
 
 static void show_header(const char *path, const TransactionList *list, int unlocked, int dirty)
@@ -102,9 +100,7 @@ static void show_header(const char *path, const TransactionList *list, int unloc
     int64_t income = 0;
     int64_t expenses = 0;
 
-    if (unlocked) {
-        calculate_totals(list, &income, &expenses);
-    }
+    int totals_ok = !unlocked || calculate_totals(list, &income, &expenses);
 
     
 printf("\n%s", blue());
@@ -117,7 +113,8 @@ printf("%s", reset());
     if (dirty) printf("   %s* unsaved changes%s", red(), reset());
     if (unlocked) printf("   Records: %zu", list->count);
 
-    if (unlocked) {
+    if (unlocked && !totals_ok) puts("\n  Balance too large to display safely.");
+    if (unlocked && totals_ok) {
         printf("\n");
         printf("  ----------------------------------------\n");
         printf("  Income:   %s%.2f UAH%s\n",

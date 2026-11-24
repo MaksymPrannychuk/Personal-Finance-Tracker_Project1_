@@ -1,5 +1,6 @@
 #include "../include/transaction_manager.h"
 #include <stddef.h>
+#include <limits.h>
 
 void init_transaction_manager(TransactionManager *manager) {
     if (manager == NULL) {
@@ -11,7 +12,7 @@ void init_transaction_manager(TransactionManager *manager) {
 }
 
 int add_transaction(TransactionManager *manager, Transaction transaction) {
-    if (manager == NULL || manager->count >= MAX_TRANSACTIONS) {
+    if (manager == NULL || manager->count < 0 || manager->count >= MAX_TRANSACTIONS || manager->next_id <= 0 || manager->next_id == INT_MAX) {
         return 0;
     }
 
