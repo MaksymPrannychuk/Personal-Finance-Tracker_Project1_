@@ -12,3 +12,11 @@
 data/*.dat
 *.bin
 secrets.txt
+# Integrated build and private vaults
+/build/
+*.enc
+*.bak
+*.tmp.*
+
+# Local user profiles (never publish names or wallets)
+/profiles/
