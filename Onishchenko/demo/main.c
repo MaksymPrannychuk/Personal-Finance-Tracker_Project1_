@@ -15,15 +15,15 @@ int main(void) {
     TransactionManager manager;
     init_transaction_manager(&manager);
 
-    int choice;
+    int choice = 0;
 
     do {
         print_menu();
-        scanf("%d", &choice);
+        if (scanf("%d", &choice) != 1) return 1;
 
         switch (choice) {
             case 1: {
-                Transaction transaction;
+                Transaction transaction = {0};
 
                 printf("\n--- Add New Transaction ---\n");
 
@@ -81,7 +81,7 @@ int main(void) {
 
             case 3: {
                 int id;
-                Transaction updated;
+                Transaction updated = {0};
 
                 printf("\n--- Edit Transaction ---\n");
                 printf("Enter transaction ID: ");

@@ -7,6 +7,7 @@ typedef struct {
     double amount;      // Сума
     char category[50];  // "Їжа", "Транспорт" тощо
     int is_income;      // 1 - дохід, 0 - витрата
+    char description[128];
 } Transaction;
 
 #endif
