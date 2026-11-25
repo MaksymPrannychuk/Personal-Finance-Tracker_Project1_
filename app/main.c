@@ -213,6 +213,7 @@ int main(int argc, char **argv)
     RateCache bank = {0};
     color = isatty(STDOUT_FILENO) && !getenv("NO_COLOR");
     struct stat st; int dirty = 0, rc = 1, demo = 0, created = 0;
+    int wallet_lock = VAULT_LOCK_ERROR;
     if (argc > 2) { puts("Usage: finance_tracker [wallet.enc | --demo]"); goto done; }
     if (argc == 2) {
         if (!strcmp(argv[1], "--demo")) demo = 1;
@@ -251,7 +252,14 @@ int main(int argc, char **argv)
     } else {
         int len = snprintf(backup, sizeof backup, "%s.bak", path);
         if (len < 0 || (size_t)len >= sizeof backup || !*path) goto done;
-        if (!created) {
+        wallet_lock = vault_lock_session(path);
+        if (wallet_lock < 0) {
+            puts(wallet_lock == VAULT_LOCK_BUSY ? "Wallet already open in another session." : "Cannot lock the wallet file.");
+            goto done;
+        }
+        if (created) {
+            if (!status("Unlock", vault_load(path, &manager, pwd))) goto done;
+        } else {
             if (lstat(path, &st) == 0) {
                 if (!S_ISREG(st.st_mode) || !password("Wallet password: ", pwd) || !status("Unlock", vault_load(path, &manager, pwd))) goto done;
             } else if (errno == ENOENT && !profile[0]) {
@@ -301,7 +309,8 @@ int main(int argc, char **argv)
                 !line("To date (blank = all): ", to, sizeof to, 0) || !number("Type (0 all, 1 income, 2 expense): ", &type) || type > 2) { puts("Invalid filter."); continue; }
             SearchCriteria c = {cat[0] ? cat : NULL, from[0] ? from : NULL, to[0] ? to : NULL, (SearchType)type};
             Transaction matches[MAX_TRANSACTIONS]; int n = search_transactions(manager.transactions, manager.count, &c, matches, MAX_TRANSACTIONS);
-            if (n < 0) puts("Invalid filter."); else show(matches, n);
+            if (n < 0) puts("Invalid filter. Use real dates in YYYY-MM-DD and put the earlier date first.");
+            else show(matches, n);
         } else if (cmd == 6) {
             int y,m; if (month(&y,&m)) print_monthly_financial_summary(manager.transactions, manager.count,y,m); else puts("Invalid month.");
         } else if (cmd == 7) {
@@ -318,9 +327,9 @@ int main(int argc, char **argv)
             if ((!dirty || save(path,&manager,pwd,&dirty)) && (lstat(backup,&st) != 0 || yes("Replace backup? (yes/no): ")))
                 status("Backup",vault_backup(path,backup,pwd));
         } else if (cmd == 11) {
-            if (yes("Restore backup and replace current records? (yes/no): ") &&
-                password("Backup password: ", next) && status("Restore",vault_restore(backup,path,&manager,next))) {
-                OPENSSL_cleanse(pwd,sizeof pwd); strcpy(pwd,next); dirty = 0;
+            if (yes("Replace current records with the backup? The wallet keeps its current password. (yes/no): ") &&
+                password("Backup password: ", next) && status("Restore",vault_restore(backup,path,&manager,next,pwd))) {
+                dirty = 0;
             }
             OPENSSL_cleanse(next,sizeof next);
         } else if (cmd == 12) {
@@ -338,5 +347,6 @@ int main(int argc, char **argv)
 done:
     OPENSSL_cleanse(pwd,sizeof pwd); OPENSSL_cleanse(next,sizeof next); OPENSSL_cleanse(&manager,sizeof manager);
     OPENSSL_cleanse(&bank,sizeof bank);
+    if (wallet_lock >= 0) close(wallet_lock);
     return rc;
 }

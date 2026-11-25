@@ -16,6 +16,7 @@ secrets.txt
 /build/
 *.enc
 *.bak
+*.pft-lock
 *.tmp.*
 
 # Local user profiles (never publish names or wallets)

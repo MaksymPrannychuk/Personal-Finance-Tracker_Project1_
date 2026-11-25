@@ -1,4 +1,5 @@
 #include "search.h"
+#include "../transaction_month.h"
 
 #include <string.h>
 
@@ -34,6 +35,10 @@ int search_transactions(const Transaction *arr, int size, const SearchCriteria *
     }
     if (criteria->type != SEARCH_ALL && criteria->type != SEARCH_INCOME &&
         criteria->type != SEARCH_EXPENSE) {
+        return -1;
+    }
+    if ((criteria->date_from != NULL && !transaction_date_is_valid(criteria->date_from)) ||
+        (criteria->date_to != NULL && !transaction_date_is_valid(criteria->date_to))) {
         return -1;
     }
     if (criteria->date_from != NULL && criteria->date_to != NULL &&

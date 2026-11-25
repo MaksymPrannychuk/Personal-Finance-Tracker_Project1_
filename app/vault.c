@@ -5,8 +5,36 @@
 #define Transaction StoredTransaction
 #include "../Prannychuk/include/backup.h"
 #undef Transaction
+#include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
+#include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+int vault_lock_session(const char *path)
+{
+    char lock_path[4096];
+    if (!path || !*path) return VAULT_LOCK_ERROR;
+    int length = snprintf(lock_path, sizeof lock_path, "%s.pft-lock", path);
+    if (length < 0 || (size_t)length >= sizeof lock_path) return VAULT_LOCK_ERROR;
+
+    // Lock a stable file because saving the wallet replaces its inode.
+    int fd = open(lock_path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) return VAULT_LOCK_ERROR;
+    struct stat file;
+    if (fstat(fd, &file) == 0 && S_ISREG(file.st_mode)) {
+        struct flock lock = {.l_type = F_WRLCK, .l_whence = SEEK_SET};
+        if (fcntl(fd, F_SETLK, &lock) == 0) return fd;
+        if (errno == EACCES || errno == EAGAIN) {
+            close(fd);
+            return VAULT_LOCK_BUSY;
+        }
+    }
+    close(fd);
+    return VAULT_LOCK_ERROR;
+}
 
 static int convert(const Transaction *t, StoredTransaction *r)
 {
@@ -81,12 +109,19 @@ static PFTStatus load_manager(const char *path, TransactionManager *m, const cha
 }
 PFTStatus vault_load(const char *path, TransactionManager *m, const char *password) { return load_manager(path, m, password); }
 PFTStatus vault_backup(const char *path, const char *backup, const char *password) { return pft_backup_create(path, backup, password); }
-PFTStatus vault_restore(const char *backup, const char *path, TransactionManager *m, const char *password)
+PFTStatus vault_restore(const char *backup, const char *path, TransactionManager *m,
+                        const char *backup_password, const char *wallet_password)
 {
-    TransactionManager temp;
-    PFTStatus s = load_manager(backup, &temp, password);
-    if (s == PFT_OK) s = pft_backup_restore(backup, path, password);
-    if (s == PFT_OK) *m = temp;
+    if (!backup || !path || !m || !strcmp(backup, path)) return PFT_ERR_ARGUMENT;
+    struct stat source, destination;
+    if (stat(backup, &source) == 0 && stat(path, &destination) == 0 &&
+        source.st_dev == destination.st_dev && source.st_ino == destination.st_ino) return PFT_ERR_ARGUMENT;
+
+    // Validate the full backup before replacing either the saved wallet or its open records.
+    TransactionManager restored;
+    PFTStatus s = load_manager(backup, &restored, backup_password);
+    if (s == PFT_OK) s = vault_save(path, &restored, wallet_password);
+    if (s == PFT_OK) *m = restored;
     return s;
 }
 PFTStatus vault_change_password(const char *path, const char *old, const char *new_password) { return pft_password_change(path, old, new_password); }
